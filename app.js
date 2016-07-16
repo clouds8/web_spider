@@ -105,29 +105,35 @@ function makeDirsForMain(downloadDir, indexPageUrls, callback){
     console.log(dirPath);
     mkdirs(dirPath, function (err) {
       console.log('make end');
+      callback(err)
     });
   }, function (err) {
     if (err) {
       callback(err);
     } else {
+      console.log('makeDirsForMain end');
       callback(null, downloadDir, urlObjs)
     }
   });
 }
 
 function downloadMain(downloadDir, indexPageUrls, callback) {
+  console.log('downloadMain start');
   callback(null, 233);
 }
 
 function getRemain(downloadDir, callback) {
+  console.log('getRemain start');
   callback(null, 122, 123)
 }
 
 function makeDirsForRemain(downloadDir, remainUrlsRelative, callback) {
+  console.log('makeDirsForRemain start');
   callback(null, 222, 223);
 }
 
 function downloadRemain(downloadDir, remainUrlsRelative, callback) {
+  console.log('downloadRemain start');
   callback(null,'result');
 }
 
@@ -193,7 +199,8 @@ function mkdirs(dirPath, callback) {
   fs.exists(dirPath, function (exist) {
     if (exist) {
       console.log(dirPath + ' is existed.');
-      callback();
+      callback(null);
+      return;
     } else {
       mkdirs(path.dirname(dirPath), function () {
         console.log('make Dir for ' + dirPath);
