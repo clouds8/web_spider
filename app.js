@@ -5,19 +5,17 @@ const async = require('async');
 const superagent = require('superagent');
 const eventproxy = require('eventproxy');
 const request = require('request');
-// const request = require('request').defaults({'proxy': 'http://myproxy:1234/'});
 const url = require('url');
 const path = require('path');
 
 let target = 'http://idzn.net/angular/src/#/app/dashboard-v1';
 let srcBase = 'http://idzn.net/angular/src/';
 let hostPath = 'http://idzn.net/angular/';
-// let indexPage = '';
 // let indexPageUrls = [];   // 正则表达式匹配网页引用的文件    ("|')[^('|")]+\.(js|css|html)(?='|")
 let indexPageName = 'index.html'
 let downloadDir = 'catch_web/';
-let limit = 5;
-let hideFilesRelativeUrls = ['js/config.lazyload.js', 'js/config.router.js'];
+let limit = 5;   // 并发下载线程数量限制
+let hideFilesRelativeUrls = ['js/config.lazyload.js', 'js/config.router.js', 'tpl/app.html', 'tpl/blocks/aside.html'];
 
 async.waterfall([
   createDownloadDir,
@@ -39,16 +37,13 @@ async.waterfall([
 
 function createDownloadDir(callback) {
   console.log('createDownloadDir');
-  fs.exists(downloadDir, function (exist) {
-    if (exist) {
-      callback(null);
-    } else {
-      fs.mkdir(downloadDir, callback(err));
-    }
+  let indexPageObj = makeUrlObjs(hostPath, srcBase, [indexPageName])[0];
+  mkdirs(downloadDir + indexPageObj.absoluteDir, function (err) {
+    callback(err, indexPageObj);
   });
 }
 
-function fetchTargetIndex(callback) {
+function fetchTargetIndex(indexPageObj, callback) {
   console.log('fetchTargetIndex');
   superagent
     .get(target)
@@ -65,16 +60,12 @@ function fetchTargetIndex(callback) {
         //取回来的indexPageUrls 第一个字符是 ' ，需要删除。
         while (indexPageUrlsLen--) {
           indexPageUrls[indexPageUrlsLen] = indexPageUrls[indexPageUrlsLen].slice(1);
-          // console.log(indexPageUrls[indexPageUrlsLen]);
         }
-        fs.writeFile(downloadDir + indexPageName, indexPage, function (err) {
+        fs.writeFile(downloadDir + indexPageObj.absoluteUrl, indexPage, function (err) {
           if (err) {
-            // console.log('writeFile err');
             callback(err);
           } else {
-            // console.log('write successfully');
-            // console.log(downloadDir);
-            // console.log(indexPageUrls);
+            console.log(indexPageUrls);
             callback(null, indexPageUrls);
           }
         });
@@ -128,7 +119,6 @@ function getRemain(callback) {
         callback(err);
       } else {
         console.log('the hide file content:');
-        // console.log(data);
         console.log(Buffer.isBuffer(data));
         console.log(typeof data === "string");
         var hideRelativeUrls =  data.match(/("|')[^('|")]+\.(js|css|html)(?='|")/g);
@@ -146,13 +136,10 @@ function getRemain(callback) {
       callback(err);
     } else {
       let size = urlsArray.length;
-      // console.log('urlsArray size :');
-      // console.log(size);
       let relativeUrls = [];
       while (size--) {
         relativeUrls = relativeUrls.concat(urlsArray[size]);
       }
-      // console.log(relativeUrls);
       callback(null, relativeUrls);
     }
   });
@@ -163,7 +150,6 @@ function makeDirsForRemain(relativeUrls, callback) {
   let urlObjs = makeUrlObjs(hostPath, srcBase, relativeUrls);
   async.each(urlObjs, function (urlObj, callback) {
     let dirPath = downloadDir + urlObj.absoluteDir;
-    // console.log(dirPath);
     mkdirs(dirPath, function (err) {
       console.log('make remain Dir end' + dirPath);
       callback(err)
@@ -255,7 +241,6 @@ function mkdirs(dirPath, callback) {
       return;
     } else {
       mkdirs(path.dirname(dirPath), function () {
-        // console.log('make Dir for ' + dirPath);
         fs.mkdir(dirPath, callback);
       });
     }
@@ -263,9 +248,6 @@ function mkdirs(dirPath, callback) {
 }
 
 // 下载引用的文件
-// function downloadFile(downloadObj) {
-//   request(downloadObj.dir).pipe(fs.createWriteStream(downloadObj.url));
-// }
 
 function download(downloadDir, limit, urlObjs, callback) {
 
@@ -273,19 +255,14 @@ function download(downloadDir, limit, urlObjs, callback) {
     let writer = fs.createWriteStream(downloadDir + urlObj.absoluteUrl);
     request.get(urlObj.totalUrl)
       .on('error', function (err) {
-        console.log('!!!!!!!!!!!!!!!!!!!!!!!!网络异常！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！');
+        console.log('!!!!!!!!!!!!!!!!!!!!!!!!网络异常！！！！！！！！！！！！！！！！！！！！');
         callback(err);
       })
       .on('response', function (response) {
-        console.log('看看请求返回什么');
+        console.log('请求返回类型:');
         console.log(response.headers['content-type']);
       })
       .pipe(writer)
-      // .on('end',function () {
-      //   console.log('watching the end');
-      //   writer.end();
-      //   callback(null);
-      // });
       .on('end', function () {
         console.log('正在监听end事件');
       })
@@ -293,8 +270,6 @@ function download(downloadDir, limit, urlObjs, callback) {
         console.log('文件读取完成');
         callback(null);
       })
-    // callback(null);
-
   }, function (err) {
 
     if (err) {
